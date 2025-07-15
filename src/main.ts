@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
+import { HttpExceptionFilter } from './http-exception.filter';
 
 async function bootstrap() {
   const logger = WinstonModule.createLogger({
@@ -23,6 +24,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { logger });
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);

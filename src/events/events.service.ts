@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -8,6 +8,7 @@ import { KlaviyoService } from '../klaviyo/klaviyo.service';
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
   constructor(
     @InjectRepository(EventEntity)
     private readonly repo: Repository<EventEntity>,
@@ -29,10 +30,17 @@ export class EventsService {
     await Promise.all(dtos.map((d) => this.create(d)));
   }
 
-  // retention every day at midnight
+  /**
+   * Purge events older than 7 days. Runs every day at midnight.
+   */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async purgeOld() {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    await this.repo.delete({ createdAt: LessThan(cutoff) });
+    try {
+      const result = await this.repo.delete({ createdAt: LessThan(cutoff) });
+      this.logger.log(`Purged ${result.affected ?? 0} events older than 7 days.`);
+    } catch (error) {
+      this.logger.error('Failed to purge old events', error?.message || error);
+    }
   }
 } 

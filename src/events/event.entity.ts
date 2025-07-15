@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { EventAttributes, ProfileAttributes } from './dto/event-attributes.interface';
 
 @Entity({ name: 'events' })
 export class EventEntity {
@@ -9,10 +10,10 @@ export class EventEntity {
   eventName: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  eventAttributes: Record<string, any>;
+  eventAttributes: EventAttributes;
 
   @Column({ type: 'jsonb', nullable: true })
-  profileAttributes: Record<string, any>;
+  profileAttributes: ProfileAttributes;
 
   @CreateDateColumn()
   createdAt: Date;

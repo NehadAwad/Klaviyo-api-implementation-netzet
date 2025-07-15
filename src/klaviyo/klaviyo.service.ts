@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { CreateEventDto } from '../events/dto/create-event.dto';
+import { KlaviyoProfile, KlaviyoProfileAttributes, KlaviyoMetric, KlaviyoEvent } from './klaviyo.types';
 
 @Injectable()
 export class KlaviyoService {
@@ -29,7 +35,7 @@ export class KlaviyoService {
     };
     if (jsonApi) {
       headers['Content-Type'] = 'application/vnd.api+json';
-      headers['accept']       = 'application/vnd.api+json';
+      headers['accept'] = 'application/vnd.api+json';
     }
     return headers;
   }
@@ -80,15 +86,16 @@ export class KlaviyoService {
     return response.data;
   }
 
-  
   async getProfileAttributesByEmail(email: string) {
     const profile = await this.getProfileResourceByEmail(email);
     return profile ? profile.attributes : null;
   }
 
-  async getProfileResourceByEmail(email: string): Promise<{ id: string; attributes: any } | null> {
+  async getProfileResourceByEmail(
+    email: string,
+  ): Promise<KlaviyoProfile | null> {
     const response = await firstValueFrom(
-      this.http.get<{ data: Array<any> }>(`${this.baseUrl}/profiles/`, {
+      this.http.get<{ data: KlaviyoProfile[] }>(`${this.baseUrl}/profiles/`, {
         headers: { ...this.authHeader(), revision: this.revision },
         params: { filter: `equals(email,"${email}")` },
       }),
@@ -107,7 +114,7 @@ export class KlaviyoService {
 
     // 2) fetch events including metric relationship
     const res = await firstValueFrom(
-      this.http.get<any>(`${this.baseUrl}/events/`, {
+      this.http.get<{ data: KlaviyoEvent[]; included?: KlaviyoMetric[] }>(`${this.baseUrl}/events/`, {
         headers: {
           ...this.authHeader(),
           revision: this.revision,
@@ -122,58 +129,56 @@ export class KlaviyoService {
     );
 
     // 3) collect all included metrics
-    const included = res.data.included as Array<any>;
+    const included = res.data.included as KlaviyoMetric[] | undefined;
     const metrics = (included || [])
       .filter((inc) => inc.type === 'metric')
-      .map((m) => ({
-        id: m.id,
-        ...(m.attributes || {}),
-      }));
+      .map((m) => m);
 
     // 4) dedupe by id
     const unique = Array.from(
-      metrics.reduce((map, m) => map.set(m.id, m), new Map<string, any>()).values()
+      metrics
+        .reduce((map, m) => map.set(m.id, m), new Map<string, KlaviyoMetric>())
+        .values(),
     );
 
     return unique;
   }
 
-  private async getEventsCountForMetric(metricId: string, date: string): Promise<number> {
-  const start = `${date}T00:00:00Z`;
-  const end   = `${date}T24:00:00Z`;
-  const payload = {
-    data: {
-      type: 'metric-aggregate',
-      attributes: {
-        metric_id:    metricId,
-        measurements: ['count'],
-        filter: [
-          `greater-or-equal(datetime,${start})`,
-          `less-than(datetime,${end})`
-        ],
-        interval:  'day',
-        page_size: 500,
-        timezone:  'UTC'
-      }
-    }
-  };
+  private async getEventsCountForMetric(
+    metricId: string,
+    date: string,
+  ): Promise<number> {
+    const start = `${date}T00:00:00Z`;
+    const end = `${date}T24:00:00Z`;
+    const payload = {
+      data: {
+        type: 'metric-aggregate',
+        attributes: {
+          metric_id: metricId,
+          measurements: ['count'],
+          filter: [
+            `greater-or-equal(datetime,${start})`,
+            `less-than(datetime,${end})`,
+          ],
+          interval: 'day',
+          page_size: 500,
+          timezone: 'UTC',
+        },
+      },
+    };
 
-  const resp = await firstValueFrom(
-    this.http.post(
-      `${this.baseUrl}/metric-aggregates/`,
-      payload,
-      { headers: { ...this.authHeader(), 'Content-Type': 'application/json' } }
-    )
-  );
+    const resp = await firstValueFrom(
+      this.http.post(`${this.baseUrl}/metric-aggregates/`, payload, {
+        headers: { ...this.authHeader(), 'Content-Type': 'application/json' },
+      }),
+    );
 
-  // resp.data.data.attributes.values is an array of { timestamp, count }
-  const values: Array<{ count: number }> = resp.data?.data?.attributes?.values ?? [];
-  return values.reduce((sum, v) => sum + (v.count || 0), 0);
-}
+    // resp.data.data.attributes.values is an array of { timestamp, count }
+    const values: Array<{ count: number }> =
+      resp.data?.data?.attributes?.values ?? [];
+    return values.reduce((sum, v) => sum + (v.count || 0), 0);
+  }
 
-  /**
-   * 4) Count of events for *every* metric on a given date
-   */
   async getEventsCountByDate(date: string): Promise<{
     date: string;
     results: Array<{ id: string; name: string; count: number }>;
@@ -190,9 +195,9 @@ export class KlaviyoService {
       try {
         // Add delay between requests to avoid rate limiting
         if (results.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+          await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms delay
         }
-        
+
         const count = await this.getEventsCountForMetric(m.id, date);
         results.push({
           id: m.id,
@@ -200,7 +205,9 @@ export class KlaviyoService {
           count,
         });
       } catch (error) {
-        this.logger.warn(`Failed to get count for metric ${m.attributes.name}: ${error.message}`);
+        this.logger.warn(
+          `Failed to get count for metric ${m.attributes.name}: ${error.message}`,
+        );
         results.push({
           id: m.id,
           name: m.attributes.name,
@@ -212,78 +219,78 @@ export class KlaviyoService {
     return { date, results };
   }
 
-
   async getEmailsByMetricName(
     metricName: string,
-    date: string
+    date: string,
   ): Promise<{ metric: string; date: string; emails: string[] }> {
     if (!date) throw new BadRequestException('date is required (YYYY-MM-DD)');
     if (!metricName) throw new BadRequestException('metric name is required');
-  
+
     // 1) Lookup metric ID
     const metricsRes = await firstValueFrom(
-      this.http.get<{ data: any[] }>(
-        `${this.baseUrl}/metrics/`,
-        { headers: this.authHeader() }
-      )
+      this.http.get<{ data: KlaviyoMetric[] }>(`${this.baseUrl}/metrics/`, {
+        headers: this.authHeader(),
+      }),
     );
     const metric = metricsRes.data.data.find(
-      m => m.attributes.name.toLowerCase() === metricName.toLowerCase()
+      (m) => m.attributes.name.toLowerCase() === metricName.toLowerCase(),
     );
-    if (!metric) throw new NotFoundException(`Metric "${metricName}" not found`);
+    if (!metric)
+      throw new NotFoundException(`Metric "${metricName}" not found`);
     const metricId = metric.id;
-  
+
     // 2) Paginate through all events
     let nextUrl: string | null = `${this.baseUrl}/events/`;
     const params = {
-      filter:       `equals(metric_id,"${metricId}")`,
-      include:      'profile',
+      filter: `equals(metric_id,"${metricId}")`,
+      include: 'profile',
       sort: '-timestamp',
       'page[size]': 200,
     };
-  
-    const allEvents: any[] = [];
-    const allProfiles: any[] = [];
-  
+
+    const allEvents: KlaviyoEvent[] = [];
+    const allProfiles: KlaviyoProfile[] = [];
+
     while (nextUrl) {
       const resp = await firstValueFrom(
-        this.http.get<any>(nextUrl, {
+        this.http.get<{ data: KlaviyoEvent[]; included?: KlaviyoProfile[] }>(nextUrl, {
           headers: { ...this.authHeader(), accept: 'application/vnd.api+json' },
           params: nextUrl === `${this.baseUrl}/events/` ? params : undefined,
-        })
+        }),
       );
-  
+
       allEvents.push(...(resp.data.data || []));
       allProfiles.push(...(resp.data.included || []));
-  
+
       // advance to the next page
-      nextUrl = resp.data.links?.next || null;
+      const links = (resp as any).data.links || (resp as any).links;
+      nextUrl = links?.next || null;
     }
-  
+
     // 3) Map profile IDs → emails
-    const emailByProfile: Record<string,string> = {};
+    const emailByProfile: Record<string, string> = {};
     for (const inc of allProfiles) {
       if (inc.type === 'profile' && inc.id && inc.attributes?.email) {
         emailByProfile[inc.id] = inc.attributes.email;
       }
     }
-  
+
     // 4) Filter events by date and pluck emails
     const windowStart = `${date}T00:00:00`;
-    const windowEnd   = `${date}T23:59:59`;
+    const windowEnd = `${date}T23:59:59`;
     const emails = allEvents
-      .map(evt => {
-        const ts = evt.attributes.datetime.replace(' ', 'T').split('+')[0];
-        if (ts >= windowStart && ts <= windowEnd) {
-          const pid = evt.relationships.profile?.data?.id;
-          return emailByProfile[pid];
+      .map((evt) => {
+        const ts = evt.attributes.datetime?.replace?.(' ', 'T').split('+')[0];
+        if (ts && ts >= windowStart && ts <= windowEnd) {
+          const pid = evt.relationships && evt.relationships.profile?.data?.id;
+          return pid ? emailByProfile[pid] : undefined;
         }
       })
       .filter((e): e is string => Boolean(e));
-  
+
     // 5) Dedupe
     const unique = Array.from(new Set(emails));
-  
+
     return { metric: metricName, date, emails: unique };
   }
 }
