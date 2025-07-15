@@ -1,98 +1,167 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# Netzet Klaviyo API
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+A NestJS backend system to interact with Klaviyo, supporting event tracking, metrics, and profile management with robust validation, error handling, and API documentation.
 
-## Description
+## 🚀 Features
+- Event creation and bulk event ingestion
+- 7-day data retention (auto-purge old events)
+- Profile and metrics lookup by email
+- Full Swagger/OpenAPI documentation (`/docs`)
+- Consistent error handling and validation
+- TypeORM + PostgreSQL integration
+- Modern code quality (DTOs, strict types, linting)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 🛠️ Technologies Used
+- [NestJS](https://nestjs.com/) (TypeScript)
+- [TypeORM](https://typeorm.io/) (PostgreSQL)
+- [class-validator](https://github.com/typestack/class-validator)
+- [Swagger](https://swagger.io/) via `@nestjs/swagger`
+- [Winston](https://github.com/winstonjs/winston) for logging
+- [@nestjs/schedule](https://docs.nestjs.com/techniques/task-scheduling) for cron jobs
 
-## Project setup
+## 📦 Setup & Run
 
-```bash
-$ pnpm install
+1. **Clone the repo:**
+   ```bash
+   git clone <your-repo-url>
+   cd netzet-task
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pnpm install
+   # or
+   npm install
+   ```
+
+3. **Configure environment:**
+   - Copy `.env.example` to `.env` and fill in your values.
+
+4. **Run the app:**
+   ```bash
+   pnpm run start:dev
+   # or
+   npm run start:dev
+   ```
+
+5. **Access API docs:**
+   - Visit [http://localhost:3000/docs](http://localhost:3000/docs)
+
+## 🧪 Example .env
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_NAME=netzet
+KLAVIYO_API_KEY=your_klaviyo_api_key
 ```
 
-## Compile and run the project
+## 📚 API Endpoints
 
-```bash
-# development
-$ pnpm run start
+### Events
+- **Create Event**
+  - `POST /events`
+  - **Body:**
+    ```json
+    {
+      "eventName": "purchased",
+      "eventAttributes": { "product": "Book", "price": 19.99 },
+      "profileAttributes": { "email": "user@example.com", "name": "John Doe" }
+    }
+    ```
+  - **Response:**
+    ```json
+    {
+      "id": "...",
+      "eventName": "purchased",
+      "eventAttributes": { "product": "Book", "price": 19.99 },
+      "profileAttributes": { "email": "user@example.com", "name": "John Doe" },
+      "createdAt": "2024-06-01T12:34:56.789Z"
+    }
+    ```
 
-# watch mode
-$ pnpm run start:dev
+- **Bulk Create Events**
+  - `POST /events/bulk`
+  - **Body:**
+    ```json
+    {
+      "events": [
+        { "eventName": "purchased", "eventAttributes": { ... }, "profileAttributes": { ... } },
+        { "eventName": "viewed", "eventAttributes": { ... }, "profileAttributes": { ... } }
+      ]
+    }
+    ```
+  - **Response:** `{ "status": "ok" }`
 
-# production mode
-$ pnpm run start:prod
-```
+### Profiles
+- **Get Profile by Email**
+  - `GET /profiles?email=user@example.com`
+  - **Response:**
+    ```json
+    {
+      "email": "user@example.com",
+      "name": "John Doe",
+      "phone": "+1234567890"
+    }
+    ```
 
-## Run tests
+- **Get Profile Metrics by Email**
+  - `GET /profiles/metrics?email=user@example.com`
+  - **Response:**
+    ```json
+    [
+      { "id": "metric1", "attributes": { "name": "purchased" }, "type": "metric" }
+    ]
+    ```
 
-```bash
-# unit tests
-$ pnpm run test
+### Metrics
+- **Get All Metrics**
+  - `GET /metrics`
+  - **Response:**
+    ```json
+    [
+      { "id": "metric1", "attributes": { "name": "purchased" }, "type": "metric" }
+    ]
+    ```
 
-# e2e tests
-$ pnpm run test:e2e
+- **Get Count of Events for All Metrics on a Date**
+  - `GET /metrics/count?date=2025-07-15`
+  - **Response:**
+    ```json
+    {
+      "date": "2025-07-15",
+      "results": [
+        { "id": "metric1", "name": "purchased", "count": 10 }
+      ]
+    }
+    ```
 
-# test coverage
-$ pnpm run test:cov
-```
+- **Get Unique Emails for a Metric on a Date**
+  - `GET /metrics/emails?metric=purchased&date=2025-07-15`
+  - **Response:**
+    ```json
+    {
+      "metric": "purchased",
+      "date": "2025-07-15",
+      "emails": ["user1@example.com", "user2@example.com"]
+    }
+    ```
 
-## Deployment
+## 📝 Notes
+- All endpoints and models are fully documented in Swagger (`/docs`).
+- All errors are returned in a consistent format:
+  ```json
+  {
+    "statusCode": 400,
+    "message": ["Validation error message"],
+    "error": "BadRequestException",
+    "timestamp": "2024-06-01T12:34:56.789Z",
+    "path": "/your/api/path"
+  }
+  ```
+- Data older than 7 days is automatically purged from the database.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
